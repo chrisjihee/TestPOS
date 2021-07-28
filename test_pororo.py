@@ -17,9 +17,12 @@ def to_tagged(lemma_tags):
 
 
 def tag_sentences(infiles: Path, outfiles: Path, idx_text: int = -1):
+    clock = StopWatch()
     with TimeJob(f"tag_sentences(infiles={infiles}, outfiles={outfiles})"):
         tot_sent, tot_word, tot_anal = 0, 0, timedelta()
-        tagger, tot_init = elasped_sec(Pororo, task="pos", lang="ko")
+        with clock:
+            tagger = Pororo(task="pos", lang="ko")
+        tot_init = clock.delta()
         for infile in files(infiles):
             idx = idx_text if idx_text >= 0 else 2 if infile.suffix.strip().lstrip('.').lower() == "tsv" else 0
             outfile = new_file(infile, outfiles)
@@ -28,20 +31,20 @@ def tag_sentences(infiles: Path, outfiles: Path, idx_text: int = -1):
                 for line in inp.readlines():
                     row = line.rstrip().split('\t')
                     text = row[idx] if len(row) > idx else row[0]
-                    res, sec = elasped_sec(tagger, text)
-                    tagged = to_tagged(res)
-                    out.write(f"*\t{infile.name}\t{text}\t{tagged}\n")
-                    out.flush()
-                    one_anal += sec
+                    with clock:
+                        res = tagger(text)
+                    one_anal += clock.delta()
                     one_word += len(text.split())
                     one_sent += 1
+                    out.write(f"*\t{infile.name}\t{text}\t{to_tagged(res)}\n")
+                    out.flush()
             tot_anal += one_anal
             tot_word += one_word
             tot_sent += one_sent
             print(f" + [File] {infile.stem}\t#sent={one_sent:7,d}\t#word={one_word:7,d}\t$anal={one_anal.total_seconds():7.3f}")
-        with stop_watch:
+        with clock:
             del tagger
-        tot_exit = stop_watch.elasped()
+        tot_exit = clock.delta()
         print(f" + [Stat] totSent={tot_sent}")
         print(f" + [Stat] totWord={tot_word}")
         print(f" + [Stat] totAnal={tot_anal.total_seconds():.3f}")
